@@ -151,6 +151,12 @@
 			"revisionTime": "2018-01-02T22:05:12Z"
 		},
 		{
+			"checksumSHA1": "mrz/kicZiUaHxkyfvC/DyQcr8Do=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "ecdeabc65495df2dec95d7c4a4c3e021903035e5",
+			"revisionTime": "2017-10-02T20:02:53Z"
+		},
+		{
 			"checksumSHA1": "jK0knSGdB7hA/Pvc0mQBYkYxN/8=",
 			"path": "github.com/go-ini/ini",
 			"revision": "32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a",
@@ -171,12 +177,64 @@
 			"revisionTime": "2017-11-20T06:35:26Z"
 		},
 		{
+			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
+			"path": "github.com/pmezard/go-difflib/difflib",
+			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
+			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
 			"checksumSHA1": "ySaT8G3I3y4MmnoXOYAAX0rC+p8=",
 			"path": "github.com/sirupsen/logrus",
 			"revision": "d682213848ed68c0a260ca37d6dd5ace8423f5ba",
 			"revisionTime": "2017-12-05T20:32:29Z",
 			"version": "v1.0.4",
 			"versionExact": "v1.0.4"
+		},
+		{
+			"checksumSHA1": "Kt+BhrXMyYvOc9TGiBVOSNn6wcc=",
+			"path": "github.com/sirupsen/logrus/hooks/test",
+			"revision": "d682213848ed68c0a260ca37d6dd5ace8423f5ba",
+			"revisionTime": "2017-12-05T20:32:29Z",
+			"version": "v1.0.4",
+			"versionExact": "v1.0.4"
+		},
+		{
+			"checksumSHA1": "fFeZf/uLSLeLUQvWdXyjNOz7fSg=",
+			"path": "github.com/stretchr/objx",
+			"revision": "74fbc600c03d927552c1888536e49238da904364",
+			"revisionTime": "2018-01-03T13:37:10Z"
+		},
+		{
+			"checksumSHA1": "Le1psgZO0t6mRg6oY5dmnjH13hk=",
+			"path": "github.com/stretchr/testify/assert",
+			"revision": "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c",
+			"revisionTime": "2017-12-30T17:54:59Z",
+			"version": "v1.2.0",
+			"versionExact": "v1.2.0"
+		},
+		{
+			"checksumSHA1": "fg3TzS9/QK3wZbzei3Z6O8XPLHg=",
+			"path": "github.com/stretchr/testify/http",
+			"revision": "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c",
+			"revisionTime": "2017-12-30T17:54:59Z",
+			"version": "v1.2.0",
+			"versionExact": "v1.2.0"
+		},
+		{
+			"checksumSHA1": "5M/9GE/PtzXUuk+qpvC/EElCRaU=",
+			"path": "github.com/stretchr/testify/mock",
+			"revision": "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c",
+			"revisionTime": "2017-12-30T17:54:59Z",
+			"version": "v1.2.0",
+			"versionExact": "v1.2.0"
+		},
+		{
+			"checksumSHA1": "nwzomvC8DZx26Ntqm8Pjx+sBho4=",
+			"path": "github.com/stretchr/testify/require",
+			"revision": "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c",
+			"revisionTime": "2017-12-30T17:54:59Z",
+			"version": "v1.2.0",
+			"versionExact": "v1.2.0"
 		},
 		{
 			"checksumSHA1": "X1NTlfcau2XcV6WtAHF6b/DECOA=",

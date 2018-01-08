@@ -43,22 +43,8 @@ func main() {
 
 	app.Action = func() {
 		log.Infof("System code: %s, App Name: %s", *appSystemCode, *appName)
-		sess, err := session.NewSession()
-		if err != nil {
-			log.WithError(err).Error("Error in creating AWS session")
-			return
-		}
-		svc := rds.New(sess)
-
-		cluster, err := getDBCluster(svc, *pacEnvironment)
-		if err != nil {
-			log.WithError(err).Error("Error in fetching DB cluster information from AWS")
-		}
-
-		err = makeDBSnapshots(svc, cluster, *pacEnvironment)
-		if err != nil {
-			log.WithError(err).Error("Error in creating DB snapshot")
-		}
+		snapshotIDPrefix := pacAuroraPrefix + *pacEnvironment + "-backup"
+		makeBackup(*pacEnvironment, snapshotIDPrefix)
 	}
 
 	err := app.Run(os.Args)
@@ -66,7 +52,29 @@ func main() {
 		log.WithError(err).Error("App could not start")
 		return
 	}
+}
 
+func makeBackup(env, snapshotIDPrefix string) {
+	sess, err := session.NewSession()
+	if err != nil {
+		log.WithError(err).Error("Error in creating AWS session")
+		return
+	}
+	svc := rds.New(sess)
+
+	cluster, err := getDBCluster(svc, env)
+	if err != nil {
+		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
+		return
+	}
+
+	snapshotID, err := makeDBSnapshots(svc, cluster, snapshotIDPrefix)
+	if err != nil {
+		log.WithError(err).Error("Error in creating DB snapshot")
+		return
+	}
+
+	log.WithField("snapshotID", snapshotID).Info("PAC aurora backup successfully created")
 }
 
 func getDBCluster(svc *rds.RDS, pacEnvironment string) (*rds.DBCluster, error) {
@@ -84,7 +92,7 @@ func getDBCluster(svc *rds.RDS, pacEnvironment string) (*rds.DBCluster, error) {
 			}
 		}
 		if result.Marker != nil {
-			input.Marker = result.Marker
+			input.SetMarker(*result.Marker)
 		} else {
 			isLastPage = true
 		}
@@ -92,13 +100,14 @@ func getDBCluster(svc *rds.RDS, pacEnvironment string) (*rds.DBCluster, error) {
 	return nil, fmt.Errorf("DB cluster not found with identifier prefix %v", clusterIdentifierPrefix)
 }
 
-func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, pacEnvironment string) error {
+func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, snapshotIDPrefix string) (string, error) {
 	input := new(rds.CreateDBClusterSnapshotInput)
 	input.SetDBClusterIdentifier(*cluster.DBClusterIdentifier)
-	timestamp := time.Now().Format("20160102")
-	snapshotIdentifier := pacAuroraPrefix + pacEnvironment + "-backup-" + timestamp
+	timestamp := time.Now().Format("20060102")
+	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
 	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 
 	_, err := svc.CreateDBClusterSnapshot(input)
-	return err
+
+	return snapshotIdentifier, err
 }
