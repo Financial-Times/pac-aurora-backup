@@ -14,20 +14,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testEnvironment = "staging"
-const testSnapshotIDPrefix = pacAuroraPrefix + testEnvironment + "-test-backup"
+const testEnvironmentLevel = "staging"
+const testSnapshotIDPrefix = pacAuroraPrefix + testEnvironmentLevel + "-test-backup"
+
+func TestExtractEnvironmentLevel(t *testing.T) {
+	env1 := "pac-staging-eu"
+	envLevel1 := extractEnvironmentLevel(env1)
+	assert.Equal(t, "staging", envLevel1)
+
+	env2 := "pac-prod-us"
+	envLevel2 := extractEnvironmentLevel(env2)
+	assert.Equal(t, "prod", envLevel2)
+}
 
 func TestHappyBackup(t *testing.T) {
-	makeBackup(testEnvironment, testSnapshotIDPrefix)
+	makeBackup(testEnvironmentLevel, testSnapshotIDPrefix)
 
-	assertCorrectBackup(t, testEnvironment, testSnapshotIDPrefix)
+	assertCorrectBackup(t, testEnvironmentLevel, testSnapshotIDPrefix)
 	cleanUpSnapshot(t, testSnapshotIDPrefix)
 }
 
 func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 	hook := testLog.NewGlobal()
 
-	makeBackup(testEnvironment+"-that-does-not-exist", testSnapshotIDPrefix)
+	makeBackup(testEnvironmentLevel+"-that-does-not-exist", testSnapshotIDPrefix)
 
 	assert.Equal(t, log.ErrorLevel, hook.LastEntry().Level)
 	assert.Equal(t, "Error in fetching DB cluster information from AWS", hook.LastEntry().Message)
@@ -39,7 +49,7 @@ func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 	hook := testLog.NewGlobal()
 
-	makeBackup(testEnvironment, "")
+	makeBackup(testEnvironmentLevel, "")
 
 	assert.Equal(t, log.ErrorLevel, hook.LastEntry().Level)
 	assert.Equal(t, "Error in creating DB snapshot", hook.LastEntry().Message)

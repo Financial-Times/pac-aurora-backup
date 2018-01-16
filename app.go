@@ -42,9 +42,10 @@ func main() {
 	log.Infof("[Startup] %v is starting", *appSystemCode)
 
 	app.Action = func() {
-		log.Infof("System code: %s, App Name: %s", *appSystemCode, *appName)
-		snapshotIDPrefix := pacAuroraPrefix + *pacEnvironment + "-backup"
-		makeBackup(*pacEnvironment, snapshotIDPrefix)
+		envLevel := extractEnvironmentLevel(*pacEnvironment)
+		log.Infof("System code: %s, App Name: %s, Environment level: %s", *appSystemCode, *appName, envLevel)
+		snapshotIDPrefix := pacAuroraPrefix + envLevel + "-backup"
+		makeBackup(envLevel, snapshotIDPrefix)
 	}
 
 	err := app.Run(os.Args)
@@ -54,7 +55,13 @@ func main() {
 	}
 }
 
-func makeBackup(env, snapshotIDPrefix string) {
+func extractEnvironmentLevel(env string) string {
+	firstHyphenIndex := strings.Index(env, "-")
+	lastHyphenIndex := strings.LastIndex(env, "-")
+	return env[firstHyphenIndex+1 : lastHyphenIndex]
+}
+
+func makeBackup(envLevel, snapshotIDPrefix string) {
 	sess, err := session.NewSession()
 	if err != nil {
 		log.WithError(err).Error("Error in creating AWS session")
@@ -62,7 +69,7 @@ func makeBackup(env, snapshotIDPrefix string) {
 	}
 	svc := rds.New(sess)
 
-	cluster, err := getDBCluster(svc, env)
+	cluster, err := getDBCluster(svc, envLevel)
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
 		return
@@ -77,8 +84,8 @@ func makeBackup(env, snapshotIDPrefix string) {
 	log.WithField("snapshotID", snapshotID).Info("PAC aurora backup successfully created")
 }
 
-func getDBCluster(svc *rds.RDS, pacEnvironment string) (*rds.DBCluster, error) {
-	clusterIdentifierPrefix := pacAuroraPrefix + pacEnvironment
+func getDBCluster(svc *rds.RDS, envLevel string) (*rds.DBCluster, error) {
+	clusterIdentifierPrefix := pacAuroraPrefix + envLevel
 	isLastPage := false
 	input := new(rds.DescribeDBClustersInput)
 	for !isLastPage {

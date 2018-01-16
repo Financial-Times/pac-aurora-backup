@@ -1,0 +1,43 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ .Values.service.name }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    visualize: "true"
+    app: {{ .Values.service.name }}
+spec:
+  schedule: "35 17 * * *" #Everyday at 12 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: {{ .Values.service.name }}
+            image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            env:
+            - name: PAC_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: environment
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: aws.region
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: aws.aurora.snapshot.access.key.id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: aws.aurora.snapshot.secret.access.key
+            resources:
+{{ toYaml .Values.resources | indent 14 }}
