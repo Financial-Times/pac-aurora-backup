@@ -37,15 +37,31 @@ func main() {
 		EnvVar: "PAC_ENVIRONMENT",
 	})
 
+	backupsRetention := app.Int(cli.IntOpt{
+		Name:   "backups-retention",
+		Value:  30,
+		Desc:   "The number of most recent backups that needs to be preserved",
+		EnvVar: "BACKUPS_RETENTION",
+	})
+
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.InfoLevel)
 	log.Infof("[Startup] %v is starting", *appSystemCode)
 
 	app.Action = func() {
 		envLevel := extractEnvironmentLevel(*pacEnvironment)
-		log.Infof("System code: %s, App Name: %s, Environment level: %s", *appSystemCode, *appName, envLevel)
+		log.Infof("System code: %s, App Name: %s, Environment level: %s, retention %v backups", *appSystemCode, *appName, envLevel, *backupsRetention)
 		snapshotIDPrefix := pacAuroraPrefix + envLevel + "-backup"
-		makeBackup(envLevel, snapshotIDPrefix)
+
+		sess, err := session.NewSession()
+		if err != nil {
+			log.WithError(err).Error("Error in creating AWS session")
+			return
+		}
+		svc := rds.New(sess)
+
+		makeBackup(svc, envLevel, snapshotIDPrefix)
+		backupCleanUp(svc, snapshotIDPrefix, *backupsRetention)
 	}
 
 	err := app.Run(os.Args)
@@ -61,14 +77,8 @@ func extractEnvironmentLevel(env string) string {
 	return env[firstHyphenIndex+1 : lastHyphenIndex]
 }
 
-func makeBackup(envLevel, snapshotIDPrefix string) {
-	sess, err := session.NewSession()
-	if err != nil {
-		log.WithError(err).Error("Error in creating AWS session")
-		return
-	}
-	svc := rds.New(sess)
-
+func makeBackup(svc *rds.RDS, envLevel, snapshotIDPrefix string) {
+	log.Info("Creating backup...")
 	cluster, err := getDBCluster(svc, envLevel)
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
@@ -117,4 +127,39 @@ func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, snapshotIDPrefix stri
 	_, err := svc.CreateDBClusterSnapshot(input)
 
 	return snapshotIdentifier, err
+}
+
+func backupCleanUp(svc *rds.RDS, snapshotIDPrefix string, backupsRetention int) {
+	log.Info("Cleaning up backups ...")
+	_, err := getDBSnapshots(svc, snapshotIDPrefix)
+	if err != nil {
+		log.WithError(err).
+			WithField("snapshotIDPrefix", snapshotIDPrefix).
+			Error("Error in fetching DB cluster snapshots for backup cleanup")
+		return
+	}
+}
+
+func getDBSnapshots(svc *rds.RDS, snapshotIDPrefix string) ([]*rds.DBClusterSnapshot, error) {
+	var snapshots []*rds.DBClusterSnapshot
+	isLastPage := false
+	input := new(rds.DescribeDBClusterSnapshotsInput)
+	input.SetSnapshotType("manual")
+	for !isLastPage {
+		result, err := svc.DescribeDBClusterSnapshots(input)
+		if err != nil {
+			return nil, err
+		}
+		for _, snapshot := range result.DBClusterSnapshots {
+			if strings.HasPrefix(*snapshot.DBClusterSnapshotIdentifier, snapshotIDPrefix) {
+				snapshots = append(snapshots, snapshot)
+			}
+		}
+		if result.Marker != nil {
+			input.SetMarker(*result.Marker)
+		} else {
+			isLastPage = true
+		}
+	}
+	return snapshots, nil
 }
