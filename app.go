@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/jawher/mow.cli"
@@ -37,15 +39,45 @@ func main() {
 		EnvVar: "PAC_ENVIRONMENT",
 	})
 
+	awsRegion := app.String(cli.StringOpt{
+		Name:   "aws-region",
+		Desc:   "The AWS region of the Aurora cluster that needs a backup",
+		EnvVar: "AWS_REGION",
+	})
+
+	awsAccessKeyID := app.String(cli.StringOpt{
+		Name:   "aws-access-key-id",
+		Desc:   "The access key ID to access AWS",
+		EnvVar: "AWS_ACCESS_KEY_ID",
+	})
+
+	awsSecretAccessKey := app.String(cli.StringOpt{
+		Name:   "aws-secret-access-key",
+		Desc:   "The secret access key to access AWS",
+		EnvVar: "AWS_SECRET_ACCESS_KEY",
+	})
+
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.InfoLevel)
 	log.Infof("[Startup] %v is starting", *appSystemCode)
 
 	app.Action = func() {
-		envLevel := extractEnvironmentLevel(*pacEnvironment)
-		log.Infof("System code: %s, App Name: %s, Environment level: %s", *appSystemCode, *appName, envLevel)
+		log.Infof("System code: %s, App Name: %s, Pac environment: %s", *appSystemCode, *appName, *pacEnvironment)
+		envLevel, err := extractEnvironmentLevel(*pacEnvironment)
+		if err != nil {
+			log.WithError(err).Error("Error in extracting environment level")
+			return
+		}
+
 		snapshotIDPrefix := pacAuroraPrefix + envLevel + "-backup"
-		makeBackup(envLevel, snapshotIDPrefix)
+
+		svc, err := newRDSService(*awsRegion, *awsAccessKeyID, *awsSecretAccessKey)
+		if err != nil {
+			log.WithError(err).Error("Error in connecting to AWS RDS")
+			return
+		}
+
+		makeBackup(svc, envLevel, snapshotIDPrefix)
 	}
 
 	err := app.Run(os.Args)
@@ -55,20 +87,31 @@ func main() {
 	}
 }
 
-func extractEnvironmentLevel(env string) string {
+func extractEnvironmentLevel(env string) (string, error) {
 	firstHyphenIndex := strings.Index(env, "-")
 	lastHyphenIndex := strings.LastIndex(env, "-")
-	return env[firstHyphenIndex+1 : lastHyphenIndex]
+	if firstHyphenIndex == lastHyphenIndex {
+		return "", fmt.Errorf("environment label is invalid: %v", env)
+	}
+	envLevel := env[firstHyphenIndex+1 : lastHyphenIndex]
+	if envLevel == "" {
+		return "", fmt.Errorf("environment label is invalid: %v", env)
+	}
+	return envLevel, nil
 }
 
-func makeBackup(envLevel, snapshotIDPrefix string) {
-	sess, err := session.NewSession()
+func newRDSService(region, accessKeyID, secretAccessKey string) (*rds.RDS, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String(region),
+		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""),
+	})
 	if err != nil {
-		log.WithError(err).Error("Error in creating AWS session")
-		return
+		return nil, err
 	}
-	svc := rds.New(sess)
+	return rds.New(sess), nil
+}
 
+func makeBackup(svc *rds.RDS, envLevel, snapshotIDPrefix string) {
 	cluster, err := getDBCluster(svc, envLevel)
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")

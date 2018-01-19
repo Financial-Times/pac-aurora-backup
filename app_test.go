@@ -1,12 +1,12 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds"
 	log "github.com/sirupsen/logrus"
 	testLog "github.com/sirupsen/logrus/hooks/test"
@@ -19,16 +19,36 @@ const testSnapshotIDPrefix = pacAuroraPrefix + testEnvironmentLevel + "-test-bac
 
 func TestExtractEnvironmentLevel(t *testing.T) {
 	env1 := "pac-staging-eu"
-	envLevel1 := extractEnvironmentLevel(env1)
+	envLevel1, err := extractEnvironmentLevel(env1)
+	assert.NoError(t, err)
 	assert.Equal(t, "staging", envLevel1)
 
 	env2 := "pac-prod-us"
-	envLevel2 := extractEnvironmentLevel(env2)
+	envLevel2, err := extractEnvironmentLevel(env2)
+	assert.NoError(t, err)
 	assert.Equal(t, "prod", envLevel2)
 }
 
+func TestExtractEnvironmentLevelError(t *testing.T) {
+	_, err := extractEnvironmentLevel("pacstagingeu")
+	assert.Error(t, err)
+
+	_, err = extractEnvironmentLevel("pac-us")
+	assert.Error(t, err)
+
+	_, err = extractEnvironmentLevel("pac--us")
+	assert.Error(t, err)
+}
+
 func TestHappyBackup(t *testing.T) {
-	makeBackup(testEnvironmentLevel, testSnapshotIDPrefix)
+	if testing.Short() {
+		t.Skip("Skipping AWS RDS integration test")
+	}
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	require.NoError(t, err)
+	makeBackup(svc, testEnvironmentLevel, testSnapshotIDPrefix)
 
 	assertCorrectBackup(t, testEnvironmentLevel, testSnapshotIDPrefix)
 	cleanUpSnapshot(t, testSnapshotIDPrefix)
@@ -37,7 +57,11 @@ func TestHappyBackup(t *testing.T) {
 func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 	hook := testLog.NewGlobal()
 
-	makeBackup(testEnvironmentLevel+"-that-does-not-exist", testSnapshotIDPrefix)
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	require.NoError(t, err)
+	makeBackup(svc, testEnvironmentLevel+"-that-does-not-exist", testSnapshotIDPrefix)
 
 	assert.Equal(t, log.ErrorLevel, hook.LastEntry().Level)
 	assert.Equal(t, "Error in fetching DB cluster information from AWS", hook.LastEntry().Message)
@@ -49,7 +73,11 @@ func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 	hook := testLog.NewGlobal()
 
-	makeBackup(testEnvironmentLevel, "")
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	require.NoError(t, err)
+	makeBackup(svc, testEnvironmentLevel, "")
 
 	assert.Equal(t, log.ErrorLevel, hook.LastEntry().Level)
 	assert.Equal(t, "Error in creating DB snapshot", hook.LastEntry().Message)
@@ -58,9 +86,10 @@ func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 }
 
 func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string) {
-	sess, err := session.NewSession()
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
-	svc := rds.New(sess)
 
 	timestamp := time.Now().Format("20060102")
 	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
@@ -75,9 +104,10 @@ func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string) {
 }
 
 func cleanUpSnapshot(t *testing.T, snapshotIDPrefix string) {
-	sess, err := session.NewSession()
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
-	svc := rds.New(sess)
 
 	timestamp := time.Now().Format("20060102")
 	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
@@ -107,9 +137,10 @@ func waitForSnapshotToBeReady(t *testing.T, svc *rds.RDS, snapshotIdentifier str
 }
 
 func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
-	sess, err := session.NewSession()
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
-	svc := rds.New(sess)
 
 	timestamp := time.Now().Format("20060102")
 	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
@@ -117,4 +148,14 @@ func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
 	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 	_, err = svc.DescribeDBClusterSnapshots(input)
 	assert.Equal(t, err.(awserr.Error).Code(), rds.ErrCodeDBClusterSnapshotNotFoundFault)
+}
+
+func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey string) {
+	region = os.Getenv("AWS_REGION")
+	require.NotEmpty(t, region, "You need to set AWS_REGION environment variable if want to run this test")
+	accessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+	require.NotEmpty(t, region, "You need to set AWS_ACCESS_KEY_ID environment variable if want to run this test")
+	secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	require.NotEmpty(t, region, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
+	return
 }
