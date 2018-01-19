@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/jawher/mow.cli"
@@ -13,6 +15,7 @@ import (
 )
 
 const pacAuroraPrefix = "pac-aurora-"
+const snapshotIDDateFormat = "2006-01-02-15-04-05"
 
 func main() {
 	app := cli.App("pac-aurora-backup", "A backup app for PAC Aurora clusters")
@@ -37,11 +40,22 @@ func main() {
 		EnvVar: "PAC_ENVIRONMENT",
 	})
 
-	backupsRetention := app.Int(cli.IntOpt{
-		Name:   "backups-retention",
-		Value:  30,
-		Desc:   "The number of most recent backups that needs to be preserved",
-		EnvVar: "BACKUPS_RETENTION",
+	awsRegion := app.String(cli.StringOpt{
+		Name:   "aws-region",
+		Desc:   "The AWS region of the Aurora cluster that needs a backup",
+		EnvVar: "AWS_REGION",
+	})
+
+	awsAccessKeyID := app.String(cli.StringOpt{
+		Name:   "aws-access-key-id",
+		Desc:   "The access key ID to access AWS",
+		EnvVar: "AWS_ACCESS_KEY_ID",
+	})
+
+	awsSecretAccessKey := app.String(cli.StringOpt{
+		Name:   "aws-secret-access-key",
+		Desc:   "The secret access key to access AWS",
+		EnvVar: "AWS_SECRET_ACCESS_KEY",
 	})
 
 	log.SetFormatter(&log.JSONFormatter{})
@@ -49,19 +63,22 @@ func main() {
 	log.Infof("[Startup] %v is starting", *appSystemCode)
 
 	app.Action = func() {
-		envLevel := extractEnvironmentLevel(*pacEnvironment)
-		log.Infof("System code: %s, App Name: %s, Environment level: %s, retention %v backups", *appSystemCode, *appName, envLevel, *backupsRetention)
-		snapshotIDPrefix := pacAuroraPrefix + envLevel + "-backup"
-
-		sess, err := session.NewSession()
+		log.Infof("System code: %s, App Name: %s, Pac environment: %s", *appSystemCode, *appName, *pacEnvironment)
+		envLevel, err := extractEnvironmentLevel(*pacEnvironment)
 		if err != nil {
-			log.WithError(err).Error("Error in creating AWS session")
+			log.WithError(err).Error("Error in extracting environment level")
 			return
 		}
-		svc := rds.New(sess)
+
+		snapshotIDPrefix := pacAuroraPrefix + envLevel + "-backup"
+
+		svc, err := newRDSService(*awsRegion, *awsAccessKeyID, *awsSecretAccessKey)
+		if err != nil {
+			log.WithError(err).Error("Error in connecting to AWS RDS")
+			return
+		}
 
 		makeBackup(svc, envLevel, snapshotIDPrefix)
-		backupCleanUp(svc, snapshotIDPrefix, *backupsRetention)
 	}
 
 	err := app.Run(os.Args)
@@ -71,14 +88,31 @@ func main() {
 	}
 }
 
-func extractEnvironmentLevel(env string) string {
+func extractEnvironmentLevel(env string) (string, error) {
 	firstHyphenIndex := strings.Index(env, "-")
 	lastHyphenIndex := strings.LastIndex(env, "-")
-	return env[firstHyphenIndex+1 : lastHyphenIndex]
+	if firstHyphenIndex == lastHyphenIndex {
+		return "", fmt.Errorf("environment label is invalid: %v", env)
+	}
+	envLevel := env[firstHyphenIndex+1 : lastHyphenIndex]
+	if envLevel == "" {
+		return "", fmt.Errorf("environment label is invalid: %v", env)
+	}
+	return envLevel, nil
+}
+
+func newRDSService(region, accessKeyID, secretAccessKey string) (*rds.RDS, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String(region),
+		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rds.New(sess), nil
 }
 
 func makeBackup(svc *rds.RDS, envLevel, snapshotIDPrefix string) {
-	log.Info("Creating backup...")
 	cluster, err := getDBCluster(svc, envLevel)
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
@@ -120,46 +154,11 @@ func getDBCluster(svc *rds.RDS, envLevel string) (*rds.DBCluster, error) {
 func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, snapshotIDPrefix string) (string, error) {
 	input := new(rds.CreateDBClusterSnapshotInput)
 	input.SetDBClusterIdentifier(*cluster.DBClusterIdentifier)
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().Format(snapshotIDDateFormat)
 	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
 	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 
 	_, err := svc.CreateDBClusterSnapshot(input)
 
 	return snapshotIdentifier, err
-}
-
-func backupCleanUp(svc *rds.RDS, snapshotIDPrefix string, backupsRetention int) {
-	log.Info("Cleaning up backups ...")
-	_, err := getDBSnapshots(svc, snapshotIDPrefix)
-	if err != nil {
-		log.WithError(err).
-			WithField("snapshotIDPrefix", snapshotIDPrefix).
-			Error("Error in fetching DB cluster snapshots for backup cleanup")
-		return
-	}
-}
-
-func getDBSnapshots(svc *rds.RDS, snapshotIDPrefix string) ([]*rds.DBClusterSnapshot, error) {
-	var snapshots []*rds.DBClusterSnapshot
-	isLastPage := false
-	input := new(rds.DescribeDBClusterSnapshotsInput)
-	input.SetSnapshotType("manual")
-	for !isLastPage {
-		result, err := svc.DescribeDBClusterSnapshots(input)
-		if err != nil {
-			return nil, err
-		}
-		for _, snapshot := range result.DBClusterSnapshots {
-			if strings.HasPrefix(*snapshot.DBClusterSnapshotIdentifier, snapshotIDPrefix) {
-				snapshots = append(snapshots, snapshot)
-			}
-		}
-		if result.Marker != nil {
-			input.SetMarker(*result.Marker)
-		} else {
-			isLastPage = true
-		}
-	}
-	return snapshots, nil
 }
