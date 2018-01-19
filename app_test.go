@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/rds"
 	log "github.com/sirupsen/logrus"
 	testLog "github.com/sirupsen/logrus/hooks/test"
@@ -48,9 +47,11 @@ func TestHappyBackup(t *testing.T) {
 
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
+
+	backupTime := time.Now()
 	makeBackup(svc, testEnvironmentLevel, testSnapshotIDPrefix)
 
-	assertCorrectBackup(t, testEnvironmentLevel, testSnapshotIDPrefix)
+	assertCorrectBackup(t, testEnvironmentLevel, testSnapshotIDPrefix, backupTime)
 	cleanUpSnapshot(t, testSnapshotIDPrefix)
 }
 
@@ -85,22 +86,19 @@ func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 	assertBackupNotExist(t, testSnapshotIDPrefix)
 }
 
-func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string) {
+func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string, expectedBackupTime time.Time) {
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
 
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
-	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
-	input := new(rds.DescribeDBClusterSnapshotsInput)
-	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
-	result, err := svc.DescribeDBClusterSnapshots(input)
-
+	snapshots, err := getDBSnapshotsByPrefix(svc, snapshotIDPrefix)
 	assert.NoError(t, err)
-	assert.Len(t, result.DBClusterSnapshots, 1)
-	snapshot := result.DBClusterSnapshots[0]
-	assert.True(t, strings.HasPrefix(*snapshot.DBClusterIdentifier, pacAuroraPrefix+env))
+	assert.Len(t, snapshots, 1)
+
+	backupTimeLabel, err := time.Parse(snapshotIDPrefix+"-"+snapshotIDDateFormat, *snapshots[0].DBClusterSnapshotIdentifier)
+	assert.NoError(t, err)
+	assert.WithinDuration(t, expectedBackupTime, backupTimeLabel, 3*time.Second)
 }
 
 func cleanUpSnapshot(t *testing.T, snapshotIDPrefix string) {
@@ -109,15 +107,16 @@ func cleanUpSnapshot(t *testing.T, snapshotIDPrefix string) {
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
-	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
-
-	waitForSnapshotToBeReady(t, svc, snapshotIdentifier)
-
-	input := new(rds.DeleteDBClusterSnapshotInput)
-	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
-	_, err = svc.DeleteDBClusterSnapshot(input)
+	snapshots, err := getDBSnapshotsByPrefix(svc, snapshotIDPrefix)
 	require.NoError(t, err)
+
+	for _, snapshot := range snapshots {
+		waitForSnapshotToBeReady(t, svc, *snapshot.DBClusterSnapshotIdentifier)
+		input := new(rds.DeleteDBClusterSnapshotInput)
+		input.SetDBClusterSnapshotIdentifier(*snapshot.DBClusterSnapshotIdentifier)
+		_, err = svc.DeleteDBClusterSnapshot(input)
+		require.NoError(t, err)
+	}
 }
 
 func waitForSnapshotToBeReady(t *testing.T, svc *rds.RDS, snapshotIdentifier string) {
@@ -142,12 +141,10 @@ func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
-	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
-	input := new(rds.DescribeDBClusterSnapshotsInput)
-	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
-	_, err = svc.DescribeDBClusterSnapshots(input)
-	assert.Equal(t, err.(awserr.Error).Code(), rds.ErrCodeDBClusterSnapshotNotFoundFault)
+	snapshots, err := getDBSnapshotsByPrefix(svc, snapshotIDPrefix)
+	require.NoError(t, err)
+
+	assert.Empty(t, snapshots)
 }
 
 func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey string) {
@@ -158,4 +155,28 @@ func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey stri
 	secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	require.NotEmpty(t, region, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
 	return
+}
+
+func getDBSnapshotsByPrefix(svc *rds.RDS, snapshotIDPrefix string) ([]*rds.DBClusterSnapshot, error) {
+	var snapshots []*rds.DBClusterSnapshot
+	isLastPage := false
+	input := new(rds.DescribeDBClusterSnapshotsInput)
+	input.SetSnapshotType("manual")
+	for !isLastPage {
+		result, err := svc.DescribeDBClusterSnapshots(input)
+		if err != nil {
+			return nil, err
+		}
+		for _, snapshot := range result.DBClusterSnapshots {
+			if strings.HasPrefix(*snapshot.DBClusterSnapshotIdentifier, snapshotIDPrefix) {
+				snapshots = append(snapshots, snapshot)
+			}
+		}
+		if result.Marker != nil {
+			input.SetMarker(*result.Marker)
+		} else {
+			isLastPage = true
+		}
+	}
+	return snapshots, nil
 }

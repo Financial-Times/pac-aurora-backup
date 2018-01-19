@@ -15,6 +15,7 @@ import (
 )
 
 const pacAuroraPrefix = "pac-aurora-"
+const snapshotIDDateFormat = "2006-01-02-15-04-05"
 
 func main() {
 	app := cli.App("pac-aurora-backup", "A backup app for PAC Aurora clusters")
@@ -153,7 +154,7 @@ func getDBCluster(svc *rds.RDS, envLevel string) (*rds.DBCluster, error) {
 func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, snapshotIDPrefix string) (string, error) {
 	input := new(rds.CreateDBClusterSnapshotInput)
 	input.SetDBClusterIdentifier(*cluster.DBClusterIdentifier)
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().Format(snapshotIDDateFormat)
 	snapshotIdentifier := snapshotIDPrefix + "-" + timestamp
 	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 
