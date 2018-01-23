@@ -1,4 +1,4 @@
-FROM golang:1.8-alpine
+FROM golang:1.9.2-alpine
 
 ENV PROJECT=pac-aurora-backup
 COPY . /${PROJECT}-sources/
