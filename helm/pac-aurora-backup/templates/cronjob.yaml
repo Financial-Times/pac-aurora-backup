@@ -11,6 +11,7 @@ spec:
   schedule: "0 12 * * *" #Everyday at 12 UTC
   jobTemplate:
     spec:
+      concurrencyPolicy: Forbid
       template:
         spec:
           restartPolicy: Never
