@@ -9,9 +9,9 @@ metadata:
     app: {{ .Values.service.name }}
 spec:
   schedule: "0 12 * * *" #Everyday at 12 UTC
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
-      concurrencyPolicy: Forbid
       template:
         spec:
           restartPolicy: Never
