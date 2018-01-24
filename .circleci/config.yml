@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /go/src/github.com/Financial-Times/pac-aurora-backup
     docker:
-      - image: golang:1.8.3
+      - image: golang:1.9.2
         environment:
           GOPATH: /go
           CIRCLE_TEST_REPORTS: /tmp/test-results
@@ -31,8 +31,7 @@ jobs:
       - run:
           name: Run Tests
           command: |
-            govendor test -race -v +local | /go/bin/go-junit-report > ${CIRCLE_TEST_REPORTS}/main.xml
-            goverage -covermode=atomic -race -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out ./...
+            goverage -covermode=atomic -race -timeout 30m -v -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out ./... | /go/bin/go-junit-report > ${CIRCLE_TEST_REPORTS}/main.xml
       - run:
           name: Upload Coverage
           command: /go/bin/goveralls -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out -service=circle-ci -repotoken=$COVERALLS_TOKEN

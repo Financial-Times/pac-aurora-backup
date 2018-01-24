@@ -1,6 +1,6 @@
 # PAC Aurora backup
 
-[![Circle CI](https://circleci.com/gh/Financial-Times/pac-aurora-backup/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/pac-aurora-backup/tree/master)[![Go Report Card](https://goreportcard.com/badge/github.com/Financial-Times/pac-aurora-backup)](https://goreportcard.com/report/github.com/Financial-Times/pac-aurora-backup) [![Coverage Status](https://coveralls.io/repos/github/Financial-Times/pac-aurora-backup/badge.svg)](https://coveralls.io/github/Financial-Times/pac-aurora-backup)
+[![Circle CI](https://circleci.com/gh/Financial-Times/pac-aurora-backup/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/pac-aurora-backup/tree/master) [![Go Report Card](https://goreportcard.com/badge/github.com/Financial-Times/pac-aurora-backup)](https://goreportcard.com/report/github.com/Financial-Times/pac-aurora-backup) [![Coverage Status](https://coveralls.io/repos/github/Financial-Times/pac-aurora-backup/badge.svg)](https://coveralls.io/github/Financial-Times/pac-aurora-backup)
 
 ## Introduction
 
@@ -64,3 +64,18 @@ go build .
   This is the Docker Hub repository: [coco/pac-aurora-backup](https://hub.docker.com/r/coco/pac-aurora-backup)
 * CI provided by CircleCI: [pac-aurora-backup](https://circleci.com/gh/Financial-Times/pac-aurora-backup)
 
+## Recommendations based on AWS limits
+
+The app and its unit tests can genuinely fail due to some aspects on how AWS RDS service is designed.
+The conditions for the this app and its test to run properly are:
+ * the source DB cluster needs to be in status `available`;
+ * no other snapshots are in `creation` state for the source DB cluster.
+ 
+A safe way to make sure that the conditions above are respected is avoiding to run this app 
+in the following scenarios:
+ * during the RDS automatic backup time window (see details [here](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html#USER_WorkingWithAutomatedBackups.BackupWindow));
+ * during the RDS maintenance time window (see details [here](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBInstance.Maintenance.html#Concepts.DBMaintenance));
+ * running this app in parallel for the same DB cluster.
+ 
+ 
+ 

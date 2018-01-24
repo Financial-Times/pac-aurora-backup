@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,8 +50,8 @@ func TestHappyBackup(t *testing.T) {
 	backupTime := time.Now()
 	makeBackup(svc, testEnvironmentLevel, testSnapshotIDPrefix)
 
-	assertCorrectBackup(t, testEnvironmentLevel, testSnapshotIDPrefix, backupTime)
-	cleanUpSnapshot(t, testSnapshotIDPrefix)
+	assertCorrectBackup(t, testSnapshotIDPrefix, backupTime)
+	cleanUpTestSnapshots(t, testSnapshotIDPrefix)
 }
 
 func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
@@ -86,7 +85,89 @@ func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 	assertBackupNotExist(t, testSnapshotIDPrefix)
 }
 
-func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string, expectedBackupTime time.Time) {
+func TestBackupCleanupSnapshotsHigherRetention(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping AWS RDS integration test")
+	}
+
+	totalSnapshots := 7
+	backupsRetention := 4
+
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	require.NoError(t, err)
+
+	cluster, err := getDBClusterByEnvironmentLevel(svc, testEnvironmentLevel)
+	require.NoError(t, err)
+
+	var expectedSnapshotsIDs []string
+
+	for i := 0; i < totalSnapshots; i++ {
+		log.Infof("Waiting for cluster to to be ready for snapshot %v", i+1)
+		waitForClusterToBeReady(t, svc, *cluster.DBClusterIdentifier)
+		log.Infof("Creating snapshot %v", i+1)
+		snapshotID, err := makeDBSnapshots(svc, cluster, testSnapshotIDPrefix)
+		require.NoError(t, err)
+		log.Infof("Waiting for snapshot %v to be ready", i+1)
+		waitForSnapshotToBeReady(t, svc, snapshotID)
+		if i >= totalSnapshots-backupsRetention {
+			expectedSnapshotsIDs = append(expectedSnapshotsIDs, snapshotID)
+		}
+	}
+
+	cleanUpBackup(svc, testSnapshotIDPrefix, backupsRetention)
+	snapshots, err := getDBSnapshotsByPrefix(svc, testSnapshotIDPrefix)
+	assert.NoError(t, err)
+	assert.Len(t, snapshots, backupsRetention)
+	for _, snapshot := range snapshots {
+		assert.NoError(t, err)
+		assert.Contains(t, expectedSnapshotsIDs, *snapshot.DBClusterSnapshotIdentifier)
+	}
+
+	cleanUpTestSnapshots(t, testSnapshotIDPrefix)
+}
+
+func TestBackupCleanupSnapshotsLowerRetention(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping AWS RDS integration test")
+	}
+
+	totalSnapshots := 3
+	backupsRetention := 4
+
+	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	require.NoError(t, err)
+
+	cluster, err := getDBClusterByEnvironmentLevel(svc, testEnvironmentLevel)
+	require.NoError(t, err)
+
+	var expectedSnapshotsIDs []string
+
+	for i := 0; i < totalSnapshots; i++ {
+		log.Infof("Waiting for cluster to to be ready for snapshot %v", i+1)
+		waitForClusterToBeReady(t, svc, *cluster.DBClusterIdentifier)
+		log.Infof("Creating snapshot %v", i+1)
+		snapshotID, err := makeDBSnapshots(svc, cluster, testSnapshotIDPrefix)
+		require.NoError(t, err)
+		log.Infof("Waiting for snapshot %v to be ready", i+1)
+		waitForSnapshotToBeReady(t, svc, snapshotID)
+		expectedSnapshotsIDs = append(expectedSnapshotsIDs, snapshotID)
+	}
+
+	cleanUpBackup(svc, testSnapshotIDPrefix, backupsRetention)
+	snapshots, err := getDBSnapshotsByPrefix(svc, testSnapshotIDPrefix)
+	assert.NoError(t, err)
+	assert.Len(t, snapshots, totalSnapshots)
+	for _, snapshot := range snapshots {
+		assert.NoError(t, err)
+		assert.Contains(t, expectedSnapshotsIDs, *snapshot.DBClusterSnapshotIdentifier)
+	}
+
+	cleanUpTestSnapshots(t, testSnapshotIDPrefix)
+}
+
+func assertCorrectBackup(t *testing.T, snapshotIDPrefix string, expectedBackupTime time.Time) {
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
 
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
@@ -101,7 +182,7 @@ func assertCorrectBackup(t *testing.T, env string, snapshotIDPrefix string, expe
 	assert.WithinDuration(t, expectedBackupTime, backupTimeLabel, 3*time.Second)
 }
 
-func cleanUpSnapshot(t *testing.T, snapshotIDPrefix string) {
+func cleanUpTestSnapshots(t *testing.T, snapshotIDPrefix string) {
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
 
 	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
@@ -120,7 +201,7 @@ func cleanUpSnapshot(t *testing.T, snapshotIDPrefix string) {
 }
 
 func waitForSnapshotToBeReady(t *testing.T, svc *rds.RDS, snapshotIdentifier string) {
-	for {
+	for i := 0; i < 20; i++ {
 		input := new(rds.DescribeDBClusterSnapshotsInput)
 		input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 		result, err := svc.DescribeDBClusterSnapshots(input)
@@ -129,10 +210,28 @@ func waitForSnapshotToBeReady(t *testing.T, svc *rds.RDS, snapshotIdentifier str
 		require.Len(t, result.DBClusterSnapshots, 1)
 		snapshot := result.DBClusterSnapshots[0]
 		if *snapshot.Status == "available" || *snapshot.Status == "failed" {
-			break
+			return
 		}
 		time.Sleep(5 * time.Second)
 	}
+	t.Fail()
+}
+
+func waitForClusterToBeReady(t *testing.T, svc *rds.RDS, clusterID string) {
+	for i := 0; i < 20; i++ {
+		input := new(rds.DescribeDBClustersInput)
+		input.SetDBClusterIdentifier(clusterID)
+		result, err := svc.DescribeDBClusters(input)
+		require.NoError(t, err)
+
+		require.Len(t, result.DBClusters, 1)
+		cluster := result.DBClusters[0]
+		if *cluster.Status == "available" {
+			return
+		}
+		time.Sleep(5 * time.Second)
+	}
+	t.Fail()
 }
 
 func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
@@ -155,28 +254,4 @@ func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey stri
 	secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	require.NotEmpty(t, region, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
 	return
-}
-
-func getDBSnapshotsByPrefix(svc *rds.RDS, snapshotIDPrefix string) ([]*rds.DBClusterSnapshot, error) {
-	var snapshots []*rds.DBClusterSnapshot
-	isLastPage := false
-	input := new(rds.DescribeDBClusterSnapshotsInput)
-	input.SetSnapshotType("manual")
-	for !isLastPage {
-		result, err := svc.DescribeDBClusterSnapshots(input)
-		if err != nil {
-			return nil, err
-		}
-		for _, snapshot := range result.DBClusterSnapshots {
-			if strings.HasPrefix(*snapshot.DBClusterSnapshotIdentifier, snapshotIDPrefix) {
-				snapshots = append(snapshots, snapshot)
-			}
-		}
-		if result.Marker != nil {
-			input.SetMarker(*result.Marker)
-		} else {
-			isLastPage = true
-		}
-	}
-	return snapshots, nil
 }

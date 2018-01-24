@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,6 +59,13 @@ func main() {
 		EnvVar: "AWS_SECRET_ACCESS_KEY",
 	})
 
+	backupsRetention := app.Int(cli.IntOpt{
+		Name:   "backups-retention",
+		Value:  35,
+		Desc:   "The number of most recent backups that needed to be preserved",
+		EnvVar: "BACKUPS_RETENTION",
+	})
+
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.InfoLevel)
 	log.Infof("[Startup] %v is starting", *appSystemCode)
@@ -79,6 +87,7 @@ func main() {
 		}
 
 		makeBackup(svc, envLevel, snapshotIDPrefix)
+		cleanUpBackup(svc, snapshotIDPrefix, *backupsRetention)
 	}
 
 	err := app.Run(os.Args)
@@ -113,7 +122,7 @@ func newRDSService(region, accessKeyID, secretAccessKey string) (*rds.RDS, error
 }
 
 func makeBackup(svc *rds.RDS, envLevel, snapshotIDPrefix string) {
-	cluster, err := getDBCluster(svc, envLevel)
+	cluster, err := getDBClusterByEnvironmentLevel(svc, envLevel)
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
 		return
@@ -128,7 +137,7 @@ func makeBackup(svc *rds.RDS, envLevel, snapshotIDPrefix string) {
 	log.WithField("snapshotID", snapshotID).Info("PAC aurora backup successfully created")
 }
 
-func getDBCluster(svc *rds.RDS, envLevel string) (*rds.DBCluster, error) {
+func getDBClusterByEnvironmentLevel(svc *rds.RDS, envLevel string) (*rds.DBCluster, error) {
 	clusterIdentifierPrefix := pacAuroraPrefix + envLevel
 	isLastPage := false
 	input := new(rds.DescribeDBClustersInput)
@@ -161,4 +170,57 @@ func makeDBSnapshots(svc *rds.RDS, cluster *rds.DBCluster, snapshotIDPrefix stri
 	_, err := svc.CreateDBClusterSnapshot(input)
 
 	return snapshotIdentifier, err
+}
+
+func cleanUpBackup(svc *rds.RDS, snapshotIDPrefix string, backupsRetention int) {
+	snapshots, err := getDBSnapshotsByPrefix(svc, snapshotIDPrefix)
+	if err != nil {
+		log.WithError(err).Error("Error in fetching DB cluster snapshots for cleanup")
+		return
+	}
+
+	if len(snapshots) > backupsRetention {
+		sort.Slice(snapshots, func(i, j int) bool {
+			return snapshots[i].SnapshotCreateTime.After(*snapshots[j].SnapshotCreateTime)
+		})
+		snapshots = snapshots[backupsRetention:]
+
+		for _, snapshot := range snapshots {
+			input := new(rds.DeleteDBClusterSnapshotInput)
+			input.SetDBClusterSnapshotIdentifier(*snapshot.DBClusterSnapshotIdentifier)
+			_, err = svc.DeleteDBClusterSnapshot(input)
+			if err != nil {
+				log.WithError(err).
+					WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
+					Error("Error in deleting DB cluster snapshot for cleanup")
+			} else {
+				log.WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
+					Info("Deleted old snapshot for cleanup")
+			}
+		}
+	}
+}
+
+func getDBSnapshotsByPrefix(svc *rds.RDS, snapshotIDPrefix string) ([]*rds.DBClusterSnapshot, error) {
+	var snapshots []*rds.DBClusterSnapshot
+	isLastPage := false
+	input := new(rds.DescribeDBClusterSnapshotsInput)
+	input.SetSnapshotType("manual")
+	for !isLastPage {
+		result, err := svc.DescribeDBClusterSnapshots(input)
+		if err != nil {
+			return nil, err
+		}
+		for _, snapshot := range result.DBClusterSnapshots {
+			if strings.HasPrefix(*snapshot.DBClusterSnapshotIdentifier, snapshotIDPrefix) {
+				snapshots = append(snapshots, snapshot)
+			}
+		}
+		if result.Marker != nil {
+			input.SetMarker(*result.Marker)
+		} else {
+			isLastPage = true
+		}
+	}
+	return snapshots, nil
 }
