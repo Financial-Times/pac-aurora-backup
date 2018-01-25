@@ -63,18 +63,23 @@ func newRDSService(region, accessKeyID, secretAccessKey string) (*rds.RDS, error
 }
 
 func (svc *auroraBackupService) MakeBackup() {
+	log.Info("Getting DB cluster ID")
 	clusterID, err := svc.getDBClusterID()
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster information from AWS")
 		return
 	}
 
+	log.WithField("clusterID", clusterID).
+		Info("Making snapshot for cluster")
 	snapshotID, err := svc.makeDBSnapshots(clusterID)
 	if err != nil {
 		log.WithError(err).Error("Error in creating DB snapshot")
 		return
 	}
 
+	log.WithField("snapshotID", snapshotID).
+		Info("Checking for snapshot successfully created")
 	err = svc.checkSnapshotCreation(snapshotID)
 	if err != nil {
 		log.WithField("snapshotID", snapshotID).
@@ -146,6 +151,7 @@ func (svc *auroraBackupService) checkSnapshotCreation(snapshotID string) error {
 }
 
 func (svc *auroraBackupService) CleanUpOldBackups() {
+	log.Info("Getting list of snapshot to be cleaned up")
 	snapshots, err := svc.getDBSnapshotsByPrefix()
 	if err != nil {
 		log.WithError(err).Error("Error in fetching DB cluster snapshots for cleanup")
@@ -159,6 +165,8 @@ func (svc *auroraBackupService) CleanUpOldBackups() {
 		snapshots = snapshots[svc.backupsRetention:]
 
 		for _, snapshot := range snapshots {
+			log.WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
+				Info("Deleting snapshot for cleanup")
 			input := new(rds.DeleteDBClusterSnapshotInput)
 			input.SetDBClusterSnapshotIdentifier(*snapshot.DBClusterSnapshotIdentifier)
 			_, err = svc.DeleteDBClusterSnapshot(input)
@@ -167,6 +175,8 @@ func (svc *auroraBackupService) CleanUpOldBackups() {
 					WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
 					Error("Error in deleting DB cluster snapshot for cleanup")
 			} else {
+				log.WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
+					Info("Checking for snapshot successfully deleted")
 				err = svc.checkSnapshotDeletion(*snapshot.DBClusterSnapshotIdentifier)
 				if err != nil {
 					log.WithError(err).

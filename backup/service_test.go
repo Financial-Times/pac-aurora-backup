@@ -227,7 +227,7 @@ func cleanUpTestSnapshots(t *testing.T, snapshotIDPrefix string) {
 	require.NoError(t, err)
 
 	for _, snapshot := range snapshots {
-		log.WithField("snapshotID", *snapshot.DBClusterIdentifier).
+		log.WithField("snapshotID", *snapshot.DBClusterSnapshotIdentifier).
 			Info("cleaning up test snapshot")
 		input := new(rds.DeleteDBClusterSnapshotInput)
 		input.SetDBClusterSnapshotIdentifier(*snapshot.DBClusterSnapshotIdentifier)
