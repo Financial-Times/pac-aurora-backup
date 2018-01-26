@@ -48,6 +48,9 @@ go build .
       --aws-region              The AWS region of the Aurora cluster that needs a backup (env $AWS_REGION)
       --aws-access-key-id       The access key ID to access AWS (env $AWS_ACCESS_KEY_ID)
       --aws-secret-access-key   The secret access key to access AWS (env $AWS_SECRET_ACCESS_KEY)
+      --backups-retention       The number of most recent backups that needed to be preserved (env $BACKUPS_RETENTION) (default 35)
+      --status-check-interval   The time elapsed between each check of a status for AWS RDS resources (env $STATUS_CHECK_INTERVAL) (default "30s")
+      --status-check-attempts   The number of attempts to check of a status for AWS RDS resources (env $STATUS_CHECK_ATTEMPTS) (default 60)
     ```
     
     **NB: AWS access key ID and secret access key are available in lastpass note "AWS Keys for Snapshot"**
