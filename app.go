@@ -75,11 +75,13 @@ func main() {
 		EnvVar: "STATUS_CHECK_ATTEMPTS",
 	})
 
-	log.SetFormatter(&log.JSONFormatter{})
+	log.SetFormatter(&log.JSONFormatter{TimestampFormat: time.RFC3339Nano})
 	log.SetLevel(log.InfoLevel)
 
+	log.Infof("[Startup] %v is starting", *appSystemCode)
+
 	app.Action = func() {
-		log.Infof("[Startup] %v is starting", *appSystemCode)
+
 		log.Infof("System code: %s, App Name: %s, Pac environment: %s", *appSystemCode, *appName, *pacEnvironment)
 
 		statusCheckInterval, err := time.ParseDuration(*statusCheckIntervalString)
@@ -105,7 +107,7 @@ func main() {
 
 		svc.MakeBackup()
 		svc.CleanUpOldBackups()
-		log.Infof("[Shutdown] %v is stopping", *appSystemCode)
+
 	}
 
 	err := app.Run(os.Args)
@@ -113,6 +115,7 @@ func main() {
 		log.WithError(err).Error("App could not start")
 		return
 	}
+	log.Infof("[Shutdown] %v is stopping", *appSystemCode)
 }
 
 func extractEnvironmentLevel(env string) (string, error) {
