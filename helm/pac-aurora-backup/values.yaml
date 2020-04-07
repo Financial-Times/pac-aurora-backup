@@ -13,3 +13,5 @@ resources:
     memory: 128Mi
 
 
+annotations:
+  iam.amazonaws.com/role: "K8sPacAuroraBackup"

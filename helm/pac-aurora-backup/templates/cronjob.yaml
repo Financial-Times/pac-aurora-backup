@@ -14,6 +14,11 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+{{- with .Values.annotations }}
+          annotations:
+{{ toYaml . | indent 12 }}
+{{- end }}
         spec:
           restartPolicy: Never
           containers:
@@ -31,15 +36,5 @@ spec:
                 configMapKeyRef:
                   name: global-config
                   key: aws.region
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: global-secrets
-                  key: aws.aurora.snapshot.access.key.id
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: global-secrets
-                  key: aws.aurora.snapshot.secret.access.key
             resources:
 {{ toYaml .Values.resources | indent 14 }}
