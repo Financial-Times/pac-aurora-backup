@@ -9,29 +9,26 @@ that belongs to PAC.
 
 ## Installation
 
-Download the source code, dependencies and test dependencies:
+Download the source code and build the project:
 
 ```
-go get -u github.com/kardianos/govendor
 mkdir $GOPATH/src/github.com/Financial-Times/pac-aurora-backup
 cd $GOPATH/src/github.com/Financial-Times
 git clone https://github.com/Financial-Times/pac-aurora-backup.git
-cd pac-aurora-backup && govendor sync
-go build .
+cd pac-aurora-backup
+go build -mod=readonly .
 ```
 
 ## Running locally
 
 1. Run the tests and install the binary:
 
-    ```
-    govendor sync
-    
+    ```    
     export AWS_REGION=<aws-region> # e.g., eu-west-1
     export AWS_ACCESS_KEY_ID=<test-access-key-id> # available in lastpass note "AWS Keys for Snapshot"
     export AWS_SECRET_ACCESS_KEY=<test-secret-access-key> # available in lastpass note "AWS Keys for Snapshot"
    
-    govendor test -v -race +local
+    go test -v -race +local
     
     go install
     ```
@@ -62,15 +59,15 @@ go build .
    
 ## Build and deployment
 
-* The application is built as a docker image inside a helm chart to be deployed as CronJob in a Kubernetes cluster.
-  An internal Jenkins job takes care to push the Docker image to Docker Hub and deploy the chart when a tag is created.
-  This is the Docker Hub repository: [coco/pac-aurora-backup](https://hub.docker.com/r/coco/pac-aurora-backup)
+* The application is built as a Docker image inside a helm chart to be deployed as cronjob in a Kubernetes cluster.
+  An internal Jenkins job takes care to push the Docker image to DockerHub and deploy the chart when a tag is created.
+  This is the DockerHub repository: [coco/pac-aurora-backup](https://hub.docker.com/r/coco/pac-aurora-backup)
 * CI provided by CircleCI: [pac-aurora-backup](https://circleci.com/gh/Financial-Times/pac-aurora-backup)
 
 ## Recommendations based on AWS limits
 
 The app and its unit tests can genuinely fail due to some aspects on how AWS RDS service is designed.
-The conditions for the this app and its test to run properly are:
+The conditions for this app and its test to run properly are:
  * the source DB cluster needs to be in status `available`;
  * no other snapshots are in `creation` state for the source DB cluster.
  
