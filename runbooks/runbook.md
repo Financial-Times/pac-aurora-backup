@@ -19,22 +19,6 @@ Bronze
 
 Production
 
-## Delivered By
-
-content
-
-## Supported By
-
-content
-
-## Known About By
-
-- hristo.georgiev
-- elina.kaneva
-- mihail.mihaylov
-- robert.marinov
-- marina.chompalova
-
 ## Host Platform
 
 AWS
@@ -50,10 +34,6 @@ No
 ## Contains Sensitive Data
 
 No
-
-## Dependencies
-
-- pac-aurora
 
 ## Failover Architecture Type
 
