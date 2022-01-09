@@ -18,7 +18,7 @@ const testStatusCheckInterval = 15 * time.Second
 const testStatusCheckAttempts = 60
 
 func TestHappyBackup(t *testing.T) {
-	if testing.Short() {
+	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
@@ -34,6 +34,10 @@ func TestHappyBackup(t *testing.T) {
 }
 
 func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
+	if !runBackupTests() {
+		t.Skip("Skipping AWS RDS integration test")
+	}
+
 	hook := testLog.NewGlobal()
 
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
@@ -51,6 +55,10 @@ func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 }
 
 func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
+	if !runBackupTests() {
+		t.Skip("Skipping AWS RDS integration test")
+	}
+
 	hook := testLog.NewGlobal()
 
 	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
@@ -67,7 +75,7 @@ func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 }
 
 func TestBackupCleanupSnapshotsHigherRetention(t *testing.T) {
-	if testing.Short() {
+	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
@@ -112,7 +120,7 @@ func TestBackupCleanupSnapshotsHigherRetention(t *testing.T) {
 }
 
 func TestBackupCleanupSnapshotsLowerRetention(t *testing.T) {
-	if testing.Short() {
+	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
@@ -153,7 +161,7 @@ func TestBackupCleanupSnapshotsLowerRetention(t *testing.T) {
 }
 
 func TestCheckSnapshotCreationNotFoundError(t *testing.T) {
-	if testing.Short() {
+	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
@@ -171,7 +179,7 @@ func TestCheckSnapshotCreationNotFoundError(t *testing.T) {
 }
 
 func TestCheckSnapshotDeletionUnexpectedStatusError(t *testing.T) {
-	if testing.Short() {
+	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
@@ -275,4 +283,9 @@ func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey stri
 	secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	require.NotEmpty(t, region, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
 	return
+}
+
+func runBackupTests() bool {
+	runBackup := os.Getenv("RUN_BACKUP_TESTS")
+	return runBackup != ""
 }
