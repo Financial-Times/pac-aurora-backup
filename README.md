@@ -11,53 +11,53 @@ that belongs to PAC.
 
 Download the source code and build the project:
 
-```
-mkdir $GOPATH/src/github.com/Financial-Times/pac-aurora-backup
-cd $GOPATH/src/github.com/Financial-Times
+```shell
 git clone https://github.com/Financial-Times/pac-aurora-backup.git
 cd pac-aurora-backup
 go build -mod=readonly .
 ```
 
-## Running locally
+### Run
 
-1. Run the tests and install the binary:
+```shell
+./pac-aurora-backup [--help]
 
-    ```    
-    export AWS_REGION=<aws-region> # e.g., eu-west-1
-    export AWS_ACCESS_KEY_ID=<test-access-key-id> # available in lastpass note "AWS Keys for Snapshot"
-    export AWS_SECRET_ACCESS_KEY=<test-secret-access-key> # available in lastpass note "AWS Keys for Snapshot"
-   
-    go test -v -race ./...
-    
-    go install
-    ```
+Options:                    
+  --app-system-code         System Code of the application (env $APP_SYSTEM_CODE) (default "pac-aurora-backup")
+  --app-name                Application name (env $APP_NAME) (default "pac-aurora-backup")
+  --pac-environment         PAC environment (env $PAC_ENVIRONMENT)
+  --aws-region              The AWS region of the Aurora cluster that needs a backup (env $AWS_REGION)
+  --aws-access-key-id       The access key ID to access AWS (env $AWS_ACCESS_KEY_ID)
+  --aws-secret-access-key   The secret access key to access AWS (env $AWS_SECRET_ACCESS_KEY)
+  --backups-retention       The number of most recent backups that needed to be preserved (env $BACKUPS_RETENTION) (default 35)
+  --status-check-interval   The time elapsed between each check of a status for AWS RDS resources (env $STATUS_CHECK_INTERVAL) (default "30s")
+  --status-check-attempts   The number of attempts to check of a status for AWS RDS resources (env $STATUS_CHECK_ATTEMPTS) (default 60)
+```
 
-2. Run the binary:
+**NB: AWS access key ID and secret access key are available in lastpass note "AWS Keys for Snapshot"**
 
-    ```
-    $GOPATH/bin/pac-aurora-backup [--help]
-  
-    Options:                    
-      --app-system-code         System Code of the application (env $APP_SYSTEM_CODE) (default "pac-aurora-backup")
-      --app-name                Application name (env $APP_NAME) (default "pac-aurora-backup")
-      --pac-environment         PAC environment (env $PAC_ENVIRONMENT)
-      --aws-region              The AWS region of the Aurora cluster that needs a backup (env $AWS_REGION)
-      --aws-access-key-id       The access key ID to access AWS (env $AWS_ACCESS_KEY_ID)
-      --aws-secret-access-key   The secret access key to access AWS (env $AWS_SECRET_ACCESS_KEY)
-      --backups-retention       The number of most recent backups that needed to be preserved (env $BACKUPS_RETENTION) (default 35)
-      --status-check-interval   The time elapsed between each check of a status for AWS RDS resources (env $STATUS_CHECK_INTERVAL) (default "30s")
-      --status-check-attempts   The number of attempts to check of a status for AWS RDS resources (env $STATUS_CHECK_ATTEMPTS) (default 60)
-    ```
-    
-    **NB: AWS access key ID and secret access key are available in lastpass note "AWS Keys for Snapshot"**
+## Test
 
-3. Test:
+### Unit tests
 
-    By running the binary successfully you should find a new snapshot identified by the label 
-    `pac-aurora-<enviroment-level>-backup-<date>` in the specified AWS region, 
-    for instance `pac-aurora-staging-backup-20180112`.
-   
+```shell
+go test -v -race ./...
+```
+
+### Integration tests
+
+ ```shell
+export RUN_BACKUP_TESTS=1 # enable integration tests
+export AWS_REGION=<aws-region> # e.g., eu-west-1
+export AWS_ACCESS_KEY_ID=<test-access-key-id> # available in lastpass note "AWS Keys for Snapshot"
+export AWS_SECRET_ACCESS_KEY=<test-secret-access-key> # available in lastpass note "AWS Keys for Snapshot"
+go test -v -race ./...
+```
+
+By running the binary successfully you should find a new snapshot identified by the label
+`pac-aurora-<enviroment-level>-backup-<date>` in the specified AWS region,
+for instance `pac-aurora-staging-backup-20180112`.
+
 ## Build and deployment
 
 * The application is built as a Docker image inside a Helm chart to be deployed as cronjob in a Kubernetes cluster.
