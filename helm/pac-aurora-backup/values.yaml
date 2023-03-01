@@ -11,7 +11,4 @@ resources:
     memory: 20Mi
   limits:
     memory: 128Mi
-
-
-annotations:
-  iam.amazonaws.com/role: "K8sPacAuroraBackup"
+serviceAccountName: eksctl-pac-aurora-backup-serviceaccount

@@ -16,13 +16,9 @@ spec:
   jobTemplate:
     spec:
       template:
-        metadata:
-{{- with .Values.annotations }}
-          annotations:
-{{ toYaml . | indent 12 }}
-{{- end }}
         spec:
           restartPolicy: Never
+          serviceAccountName: {{ .Values.serviceAccountName }}
           containers:
           - name: {{ .Values.service.name }}
             image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
