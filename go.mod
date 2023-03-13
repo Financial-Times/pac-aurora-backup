@@ -1,6 +1,6 @@
 module github.com/Financial-Times/pac-aurora-backup
 
-go 1.17
+go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.12.56-0.20180102220512-59a00e612400
