@@ -7,6 +7,10 @@
 
 This service handles backups for AWS Aurora databases used by PAC (platform for annotation curation)
 
+## Code
+
+pac-aurora-backup
+
 ## Primary URL
 
 <https://github.com/Financial-Times/pac-aurora-backup>
