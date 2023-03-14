@@ -22,19 +22,19 @@ go build -mod=readonly .
 ```shell
 ./pac-aurora-backup [--help]
 
-Options:                    
+Options:
   --app-system-code         System Code of the application (env $APP_SYSTEM_CODE) (default "pac-aurora-backup")
   --app-name                Application name (env $APP_NAME) (default "pac-aurora-backup")
   --pac-environment         PAC environment (env $PAC_ENVIRONMENT)
-  --aws-region              The AWS region of the Aurora cluster that needs a backup (env $AWS_REGION)
-  --aws-access-key-id       The access key ID to access AWS (env $AWS_ACCESS_KEY_ID)
-  --aws-secret-access-key   The secret access key to access AWS (env $AWS_SECRET_ACCESS_KEY)
+  --rds-region              The AWS region of the Aurora cluster that needs a backup (env $RDS_REGION)
   --backups-retention       The number of most recent backups that needed to be preserved (env $BACKUPS_RETENTION) (default 35)
   --status-check-interval   The time elapsed between each check of a status for AWS RDS resources (env $STATUS_CHECK_INTERVAL) (default "30s")
   --status-check-attempts   The number of attempts to check of a status for AWS RDS resources (env $STATUS_CHECK_ATTEMPTS) (default 60)
 ```
 
-**NB: AWS access key ID and secret access key are available in lastpass note "AWS Keys for Snapshot"**
+#### Running in Kubernetes
+
+The app is using ServiceAccount which is linked to AWS IAM Role, as a result upon pod creation AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE envvars are being injected into the pod and the aws-sdk-go uses them behind the scenes.
 
 ## Test
 
@@ -51,6 +51,7 @@ export RUN_BACKUP_TESTS=1 # enable integration tests
 export AWS_REGION=<aws-region> # e.g., eu-west-1
 export AWS_ACCESS_KEY_ID=<test-access-key-id> # available in lastpass note "AWS Keys for Snapshot"
 export AWS_SECRET_ACCESS_KEY=<test-secret-access-key> # available in lastpass note "AWS Keys for Snapshot"
+export AWS_SESSION_TOKEN=<session-token> # if you are using temporary credentials
 go test -v -race ./...
 ```
 

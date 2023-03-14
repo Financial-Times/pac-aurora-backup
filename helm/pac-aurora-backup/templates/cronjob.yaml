@@ -29,7 +29,7 @@ spec:
                 configMapKeyRef:
                   name: global-config
                   key: environment
-            - name: AWS_REGION
+            - name: RDS_REGION
               valueFrom:
                 configMapKeyRef:
                   name: global-config

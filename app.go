@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Financial-Times/pac-aurora-backup/backup"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,22 +36,10 @@ func main() {
 		EnvVar: "PAC_ENVIRONMENT",
 	})
 
-	awsRegion := app.String(cli.StringOpt{
-		Name:   "aws-region",
+	rdsRegion := app.String(cli.StringOpt{
+		Name:   "rds-region",
 		Desc:   "The AWS region of the Aurora cluster that needs a backup",
-		EnvVar: "AWS_REGION",
-	})
-
-	awsAccessKeyID := app.String(cli.StringOpt{
-		Name:   "aws-access-key-id",
-		Desc:   "The access key ID to access AWS",
-		EnvVar: "AWS_ACCESS_KEY_ID",
-	})
-
-	awsSecretAccessKey := app.String(cli.StringOpt{
-		Name:   "aws-secret-access-key",
-		Desc:   "The secret access key to access AWS",
-		EnvVar: "AWS_SECRET_ACCESS_KEY",
+		EnvVar: "RDS_REGION",
 	})
 
 	backupsRetention := app.Int(cli.IntOpt{
@@ -99,7 +87,7 @@ func main() {
 		clusterIDPrefix := pacAuroraPrefix + envLevel
 		snapshotIDPrefix := clusterIDPrefix + "-backup"
 
-		svc, err := backup.NewBackupService(*awsRegion, *awsAccessKeyID, *awsSecretAccessKey, clusterIDPrefix, snapshotIDPrefix, statusCheckInterval, *statusCheckAttempts, *backupsRetention)
+		svc, err := backup.NewBackupService(*rdsRegion, clusterIDPrefix, snapshotIDPrefix, statusCheckInterval, *statusCheckAttempts, *backupsRetention)
 		if err != nil {
 			log.WithError(err).Error("Error in creating a new backup service")
 			return

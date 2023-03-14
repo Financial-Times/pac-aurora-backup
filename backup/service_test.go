@@ -21,12 +21,12 @@ func TestHappyBackup(t *testing.T) {
 	if !runBackupTests() {
 		t.Skip("Skipping AWS RDS integration test")
 	}
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
-	backupTime := time.Now()
+	backupTime := time.Now().UTC()
 	svc.MakeBackup()
 
 	assertCorrectBackup(t, testSnapshotIDPrefix, backupTime)
@@ -40,9 +40,9 @@ func TestUnhappyBackupDueMissingDBCluster(t *testing.T) {
 
 	hook := testLog.NewGlobal()
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix+"-that-does-not-exist", testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix+"-that-does-not-exist", testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
 	svc.MakeBackup()
@@ -61,9 +61,9 @@ func TestUnhappyBackupDueDBClusterCreationError(t *testing.T) {
 
 	hook := testLog.NewGlobal()
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, "", testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix, "", testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
 	svc.MakeBackup()
@@ -79,12 +79,12 @@ func TestBackupCleanupSnapshotsHigherRetention(t *testing.T) {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
 	totalSnapshots := 7
 	backupsRetention := 4
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, backupsRetention)
+	svc, err := NewBackupService(region, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, backupsRetention)
 
 	require.NoError(t, err)
 
@@ -127,8 +127,8 @@ func TestBackupCleanupSnapshotsLowerRetention(t *testing.T) {
 	totalSnapshots := 3
 	backupsRetention := 4
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, backupsRetention)
+	region := getAWSAccessConfig(t)
+	svc, err := NewBackupService(region, testClusterIDPrefix, testSnapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, backupsRetention)
 	require.NoError(t, err)
 
 	clusterID, err := svc.(*auroraBackupService).getDBClusterID()
@@ -165,8 +165,8 @@ func TestCheckSnapshotCreationNotFoundError(t *testing.T) {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
-	rdsSvc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	region := getAWSAccessConfig(t)
+	rdsSvc, err := newRDSService(region)
 	require.NoError(t, err)
 
 	svc := auroraBackupService{
@@ -183,8 +183,8 @@ func TestCheckSnapshotDeletionUnexpectedStatusError(t *testing.T) {
 		t.Skip("Skipping AWS RDS integration test")
 	}
 
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
-	rdsSvc, err := newRDSService(region, accessKeyID, secretAccessKey)
+	region := getAWSAccessConfig(t)
+	rdsSvc, err := newRDSService(region)
 	require.NoError(t, err)
 
 	svc := auroraBackupService{
@@ -211,9 +211,9 @@ func TestCheckSnapshotDeletionUnexpectedStatusError(t *testing.T) {
 }
 
 func assertCorrectBackup(t *testing.T, snapshotIDPrefix string, expectedBackupTime time.Time) {
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
 	snapshots, err := svc.(*auroraBackupService).getDBSnapshotsByPrefix()
@@ -226,9 +226,9 @@ func assertCorrectBackup(t *testing.T, snapshotIDPrefix string, expectedBackupTi
 }
 
 func cleanUpTestSnapshots(t *testing.T, snapshotIDPrefix string) {
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
 	snapshots, err := svc.(*auroraBackupService).getDBSnapshotsByPrefix()
@@ -264,9 +264,9 @@ func waitForClusterToBeReady(t *testing.T, svc *rds.RDS, clusterID string) {
 }
 
 func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
-	region, accessKeyID, secretAccessKey := getAWSAccessConfig(t)
+	region := getAWSAccessConfig(t)
 
-	svc, err := NewBackupService(region, accessKeyID, secretAccessKey, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
+	svc, err := NewBackupService(region, testClusterIDPrefix, snapshotIDPrefix, testStatusCheckInterval, testStatusCheckAttempts, 0)
 	require.NoError(t, err)
 
 	snapshots, err := svc.(*auroraBackupService).getDBSnapshotsByPrefix()
@@ -275,14 +275,18 @@ func assertBackupNotExist(t *testing.T, snapshotIDPrefix string) {
 	assert.Empty(t, snapshots)
 }
 
-func getAWSAccessConfig(t *testing.T) (region, accessKeyID, secretAccessKey string) {
-	region = os.Getenv("AWS_REGION")
+func getAWSAccessConfig(t *testing.T) string {
+	var (
+		region          = os.Getenv("AWS_REGION")
+		accessKeyID     = os.Getenv("AWS_ACCESS_KEY_ID")
+		secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	)
+
 	require.NotEmpty(t, region, "You need to set AWS_REGION environment variable if want to run this test")
-	accessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
-	require.NotEmpty(t, region, "You need to set AWS_ACCESS_KEY_ID environment variable if want to run this test")
-	secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
-	require.NotEmpty(t, region, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
-	return
+	require.NotEmpty(t, accessKeyID, "You need to set AWS_ACCESS_KEY_ID environment variable if want to run this test")
+	require.NotEmpty(t, secretAccessKey, "You need to set AWS_SECRET_ACCESS_KEY environment variable if want to run this test")
+
+	return region
 }
 
 func runBackupTests() bool {
