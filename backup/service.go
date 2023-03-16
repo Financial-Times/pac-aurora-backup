@@ -35,8 +35,8 @@ type auroraBackupService struct {
 	backupsRetention    int
 }
 
-func NewBackupService(region, accessKeyID, secretAccessKey, clusterIDPrefix, snapshotIDPrefix string, statusCheckInterval time.Duration, statusCheckAttempts, backupsRetention int) (Service, error) {
-	svc, err := newRDSService(region, accessKeyID, secretAccessKey)
+func NewBackupService(region, clusterIDPrefix, snapshotIDPrefix string, statusCheckInterval time.Duration, statusCheckAttempts, backupsRetention int) (Service, error) {
+	svc, err := newRDSService(region)
 	if err != nil {
 		return nil, err
 	}
@@ -50,13 +50,12 @@ func NewBackupService(region, accessKeyID, secretAccessKey, clusterIDPrefix, sna
 	}, nil
 }
 
-func newRDSService(region, accessKeyID, secretAccessKey string) (*rds.RDS, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(region),
-	})
+func newRDSService(region string) (*rds.RDS, error) {
+	sess, err := session.NewSession(aws.NewConfig().WithRegion(region))
 	if err != nil {
 		return nil, err
 	}
+
 	return rds.New(sess), nil
 }
 
@@ -115,7 +114,7 @@ func (svc *auroraBackupService) getDBClusterID() (string, error) {
 func (svc *auroraBackupService) makeDBSnapshots(clusterID string) (string, error) {
 	input := new(rds.CreateDBClusterSnapshotInput)
 	input.SetDBClusterIdentifier(clusterID)
-	timestamp := time.Now().Format(snapshotIDDateFormat)
+	timestamp := time.Now().UTC().Format(snapshotIDDateFormat)
 	snapshotIdentifier := svc.snapshotIDPrefix + "-" + timestamp
 	input.SetDBClusterSnapshotIdentifier(snapshotIdentifier)
 
